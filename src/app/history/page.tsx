@@ -3,14 +3,16 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getData, deleteEntry } from '@/lib/storage';
 import { Entry } from '@/lib/types';
+import { useProfile } from '@/context/ProfileContext';
 
-function exportCSV(entries: Entry[]) {
-  const headers = ['Date', 'Weight (lbs)', 'Neck (in)', 'Waist (in)', 'Height (in)', 'Fat %', 'Fat Lbs', 'Lean Lbs', 'Notes'];
+function exportCSV(entries: Entry[], profileName: string) {
+  const headers = ['Date', 'Weight (lbs)', 'Neck (in)', 'Waist (in)', 'Hip (in)', 'Height (in)', 'Fat %', 'Fat Lbs', 'Lean Lbs', 'Notes'];
   const rows = entries.map((e) => [
     e.date,
     e.weight,
     e.neck,
     e.waist,
+    e.hip ?? '',
     e.height,
     e.fatPercent,
     e.fatLbs,
@@ -22,7 +24,7 @@ function exportCSV(entries: Entry[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `bodyrec-export-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `bodyrec-${profileName}-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -32,30 +34,35 @@ function fmt(val: number, decimals = 1) {
 }
 
 export default function HistoryPage() {
+  const { profile } = useProfile();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   function load() {
-    const data = getData();
+    const data = getData(profile);
     const sorted = [...data.entries].sort((a, b) => b.date.localeCompare(a.date));
     setEntries(sorted);
     setLoaded(true);
   }
 
   useEffect(() => {
+    setConfirmDeleteId(null);
     load();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile]);
 
   function handleDelete(id: string) {
-    deleteEntry(id);
+    deleteEntry(id, profile);
     setConfirmDeleteId(null);
     load();
   }
 
   if (!loaded) return null;
 
-  // For week-over-week, we need chronological order
+  const profileName = profile === 'bill' ? 'bill' : 'mel';
+
+  // Build prev-entry map using chronological order
   const chrono = [...entries].sort((a, b) => a.date.localeCompare(b.date));
   const prevMap = new Map<string, Entry>();
   chrono.forEach((e, i) => {
@@ -72,8 +79,7 @@ export default function HistoryPage() {
     if (!prev) return 'text-gray-600';
     const d = (current as number) - (prev[key] as number);
     if (d === 0) return 'text-gray-500';
-    const isGood = lowerIsBetter ? d < 0 : d > 0;
-    return isGood ? 'text-green-400' : 'text-red-400';
+    return (lowerIsBetter ? d < 0 : d > 0) ? 'text-green-400' : 'text-red-400';
   }
 
   return (
@@ -82,7 +88,7 @@ export default function HistoryPage() {
         <h1 className="text-xl font-bold text-gray-100">History</h1>
         {entries.length > 0 && (
           <button
-            onClick={() => exportCSV([...entries].sort((a, b) => a.date.localeCompare(b.date)))}
+            onClick={() => exportCSV(chrono, profileName)}
             className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg transition-colors border border-gray-700"
           >
             Export CSV
@@ -92,7 +98,7 @@ export default function HistoryPage() {
 
       {entries.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-gray-500 mb-4">No entries yet.</p>
+          <p className="text-gray-500 mb-4">No entries for {profile === 'bill' ? 'Bill' : 'Mel'} yet.</p>
           <Link
             href="/log"
             className="inline-block bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-medium transition-colors"
@@ -176,9 +182,7 @@ export default function HistoryPage() {
                       </div>
                     )}
                   </div>
-                  {e.notes && (
-                    <p className="mt-2 text-xs text-gray-500 italic">{e.notes}</p>
-                  )}
+                  {e.notes && <p className="mt-2 text-xs text-gray-500 italic">{e.notes}</p>}
                 </div>
               );
             })}
@@ -233,32 +237,20 @@ export default function HistoryPage() {
                       <td className="py-3 px-3 text-gray-500 max-w-[160px] truncate">{e.notes}</td>
                       <td className="py-3 pr-0 pl-3">
                         <div className="flex items-center gap-2">
-                          <Link
-                            href={`/log?id=${e.id}`}
-                            className="text-blue-400 hover:text-blue-300 text-xs"
-                          >
+                          <Link href={`/log?id=${e.id}`} className="text-blue-400 hover:text-blue-300 text-xs">
                             Edit
                           </Link>
                           {confirmDeleteId === e.id ? (
                             <>
-                              <button
-                                onClick={() => handleDelete(e.id)}
-                                className="text-red-400 hover:text-red-300 text-xs"
-                              >
+                              <button onClick={() => handleDelete(e.id)} className="text-red-400 hover:text-red-300 text-xs">
                                 Confirm
                               </button>
-                              <button
-                                onClick={() => setConfirmDeleteId(null)}
-                                className="text-gray-500 hover:text-gray-400 text-xs"
-                              >
+                              <button onClick={() => setConfirmDeleteId(null)} className="text-gray-500 hover:text-gray-400 text-xs">
                                 Cancel
                               </button>
                             </>
                           ) : (
-                            <button
-                              onClick={() => setConfirmDeleteId(e.id)}
-                              className="text-red-500 hover:text-red-400 text-xs"
-                            >
+                            <button onClick={() => setConfirmDeleteId(e.id)} className="text-red-500 hover:text-red-400 text-xs">
                               Delete
                             </button>
                           )}

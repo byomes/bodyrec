@@ -3,8 +3,9 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { getData, saveEntry, findEntryByDate, findEntryById, deleteEntry, saveSettings } from '@/lib/storage';
-import { calcFatPercent, calcFatLbs, calcLeanLbs } from '@/lib/calculations';
+import { calcFatPercentMale, calcFatPercentFemale, calcFatLbs, calcLeanLbs } from '@/lib/calculations';
 import { Entry } from '@/lib/types';
+import { useProfile } from '@/context/ProfileContext';
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -18,11 +19,14 @@ function LogForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get('id');
+  const { profile } = useProfile();
+  const isMel = profile === 'mel';
 
   const [date, setDate] = useState(todayStr());
   const [weight, setWeight] = useState('');
   const [neck, setNeck] = useState('');
   const [waist, setWaist] = useState('');
+  const [hip, setHip] = useState('');
   const [height, setHeight] = useState('');
   const [notes, setNotes] = useState('');
   const [preview, setPreview] = useState<{
@@ -33,22 +37,32 @@ function LogForm() {
   const [dateConflictId, setDateConflictId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Load settings + existing entry (re-runs when profile changes)
   useEffect(() => {
-    const data = getData();
+    const data = getData(profile);
     if (data.settings.height) setHeight(String(data.settings.height));
+    // Reset fields that don't carry across profiles
+    setWeight('');
+    setNeck('');
+    setWaist('');
+    setHip('');
+    setNotes('');
+    setDate(todayStr());
+    setPreview(null);
 
     if (editId) {
-      const entry = findEntryById(editId);
+      const entry = findEntryById(editId, profile);
       if (entry) {
         setDate(entry.date);
         setWeight(String(entry.weight));
         setNeck(String(entry.neck));
         setWaist(String(entry.waist));
+        if (entry.hip) setHip(String(entry.hip));
         setHeight(String(entry.height));
         setNotes(entry.notes || '');
       }
     }
-  }, [editId]);
+  }, [editId, profile]);
 
   // Live calculation preview
   useEffect(() => {
@@ -56,28 +70,39 @@ function LogForm() {
     const n = parseFloat(neck);
     const wa = parseFloat(waist);
     const h = parseFloat(height);
-    if (w > 0 && n > 0 && wa > 0 && h > 0) {
-      const fp = calcFatPercent(wa, n, h);
-      if (fp !== null) {
-        const fl = calcFatLbs(w, fp);
-        const ll = calcLeanLbs(w, fl);
-        setPreview({ fatPercent: fp, fatLbs: fl, leanLbs: ll });
-        return;
+
+    let fp: number | null = null;
+
+    if (isMel) {
+      const hi = parseFloat(hip);
+      if (w > 0 && n > 0 && wa > 0 && hi > 0 && h > 0) {
+        fp = calcFatPercentFemale(wa, hi, n, h);
+      }
+    } else {
+      if (w > 0 && n > 0 && wa > 0 && h > 0) {
+        fp = calcFatPercentMale(wa, n, h);
       }
     }
-    setPreview(null);
-  }, [weight, neck, waist, height]);
 
-  // Check for date conflicts
+    if (fp !== null) {
+      const fl = calcFatLbs(w, fp);
+      const ll = calcLeanLbs(w, fl);
+      setPreview({ fatPercent: fp, fatLbs: fl, leanLbs: ll });
+    } else {
+      setPreview(null);
+    }
+  }, [weight, neck, waist, hip, height, isMel]);
+
+  // Check for date conflicts within this profile
   useEffect(() => {
     if (!date) return;
-    const existing = findEntryByDate(date);
+    const existing = findEntryByDate(date, profile);
     if (existing && existing.id !== editId) {
       setDateConflictId(existing.id);
     } else {
       setDateConflictId(null);
     }
-  }, [date, editId]);
+  }, [date, editId, profile]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -90,12 +115,10 @@ function LogForm() {
 
     const h = parseFloat(height);
 
-    // If editing and date changed to a conflicting date, remove the conflict
     if (editId && dateConflictId) {
-      deleteEntry(dateConflictId);
+      deleteEntry(dateConflictId, profile);
     }
 
-    // Determine ID: editing → keep editId; conflict on new → reuse conflict id; else new uuid
     const id = editId ?? dateConflictId ?? uuidv4();
 
     const entry: Entry = {
@@ -104,6 +127,7 @@ function LogForm() {
       weight: parseFloat(weight),
       neck: parseFloat(neck),
       waist: parseFloat(waist),
+      ...(isMel && hip ? { hip: parseFloat(hip) } : {}),
       height: h,
       fatPercent: preview.fatPercent,
       fatLbs: preview.fatLbs,
@@ -111,13 +135,12 @@ function LogForm() {
       notes,
     };
 
-    // Sync height to settings
-    const data = getData();
+    const data = getData(profile);
     if (data.settings.height !== h) {
-      saveSettings({ ...data.settings, height: h });
+      saveSettings({ ...data.settings, height: h }, profile);
     }
 
-    saveEntry(entry);
+    saveEntry(entry, profile);
     router.push('/');
   }
 
@@ -125,9 +148,12 @@ function LogForm() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
-      <h1 className="text-xl font-bold text-gray-100 mb-6">
+      <h1 className="text-xl font-bold text-gray-100 mb-1">
         {editId ? 'Edit Entry' : 'Log Entry'}
       </h1>
+      <p className="text-sm text-gray-500 mb-6">
+        {profile === 'bill' ? 'Bill — US Navy (male)' : 'Mel — US Navy (female)'}
+      </p>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -193,6 +219,24 @@ function LogForm() {
             required
           />
         </div>
+
+        {isMel && (
+          <div>
+            <label className={labelClass}>Hip circumference (inches)</label>
+            <input
+              type="number"
+              value={hip}
+              onChange={(e) => setHip(e.target.value)}
+              placeholder="e.g. 40"
+              step="0.1"
+              min="20"
+              max="80"
+              className={inputClass}
+              inputMode="decimal"
+              required
+            />
+          </div>
+        )}
 
         <div>
           <label className={labelClass}>

@@ -1,9 +1,12 @@
+export type Profile = 'bill' | 'mel';
+
 export interface Entry {
   id: string;
   date: string;
   weight: number;
   neck: number;
   waist: number;
+  hip?: number;
   height: number;
   fatPercent: number;
   fatLbs: number;

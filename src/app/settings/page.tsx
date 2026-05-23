@@ -2,12 +2,14 @@
 import { useEffect, useState } from 'react';
 import { getData, saveSettings, clearAllData } from '@/lib/storage';
 import { Settings } from '@/lib/types';
+import { useProfile } from '@/context/ProfileContext';
 
 const inputClass =
   'w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3.5 text-gray-100 text-base focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors';
 const labelClass = 'block text-sm font-medium text-gray-400 mb-1.5';
 
 export default function SettingsPage() {
+  const { profile } = useProfile();
   const [settings, setSettings] = useState<Settings>({
     height: null,
     goalFatPercent: null,
@@ -19,20 +21,23 @@ export default function SettingsPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const data = getData();
+    const data = getData(profile);
     setSettings(data.settings);
+    setSaved(false);
+    setConfirmClear(false);
+    setCleared(false);
     setLoaded(true);
-  }, []);
+  }, [profile]);
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    saveSettings(settings);
+    saveSettings(settings, profile);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
 
   function handleClear() {
-    clearAllData();
+    clearAllData(profile);
     setConfirmClear(false);
     setCleared(true);
     setSettings({ height: null, goalFatPercent: null, goalWeight: null });
@@ -49,9 +54,12 @@ export default function SettingsPage() {
 
   if (!loaded) return null;
 
+  const profileName = profile === 'bill' ? 'Bill' : 'Mel';
+
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
-      <h1 className="text-xl font-bold text-gray-100 mb-6">Settings</h1>
+      <h1 className="text-xl font-bold text-gray-100 mb-1">Settings</h1>
+      <p className="text-sm text-gray-500 mb-6">{profileName}&apos;s profile</p>
 
       <form onSubmit={handleSave} className="space-y-5">
         <section>
@@ -81,9 +89,7 @@ export default function SettingsPage() {
               <input
                 type="number"
                 value={numVal(settings.goalFatPercent)}
-                onChange={(e) =>
-                  setSettings((s) => ({ ...s, goalFatPercent: parseNum(e.target.value) }))
-                }
+                onChange={(e) => setSettings((s) => ({ ...s, goalFatPercent: parseNum(e.target.value) }))}
                 placeholder="e.g. 18"
                 step="0.1"
                 min="3"
@@ -97,9 +103,7 @@ export default function SettingsPage() {
               <input
                 type="number"
                 value={numVal(settings.goalWeight)}
-                onChange={(e) =>
-                  setSettings((s) => ({ ...s, goalWeight: parseNum(e.target.value) }))
-                }
+                onChange={(e) => setSettings((s) => ({ ...s, goalWeight: parseNum(e.target.value) }))}
                 placeholder="e.g. 195"
                 step="0.5"
                 min="50"
@@ -127,12 +131,12 @@ export default function SettingsPage() {
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Danger Zone</h2>
         {cleared ? (
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center text-gray-400 text-sm">
-            All data cleared.
+            All data for {profileName} cleared.
           </div>
         ) : confirmClear ? (
           <div className="bg-red-900/20 border border-red-800 rounded-xl p-4 space-y-3">
             <p className="text-red-300 text-sm font-medium">
-              This will permanently delete all entries and settings. Are you sure?
+              This will permanently delete all of {profileName}&apos;s entries and settings. Are you sure?
             </p>
             <div className="flex gap-3">
               <button
@@ -154,7 +158,7 @@ export default function SettingsPage() {
             onClick={() => setConfirmClear(true)}
             className="w-full bg-transparent border border-red-800 hover:bg-red-900/20 text-red-400 py-3 rounded-xl font-medium text-sm transition-colors"
           >
-            Clear All Data
+            Clear {profileName}&apos;s Data
           </button>
         )}
       </section>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getData } from '@/lib/storage';
 import { Entry, Settings } from '@/lib/types';
+import { useProfile } from '@/context/ProfileContext';
 import { StatsChart } from '@/components/StatsChart';
 
 function StatCard({ label, value, unit }: { label: string; value: number; unit: string }) {
@@ -39,9 +40,7 @@ function ChangeRow({
     <div className="flex items-center justify-between py-2.5 border-b border-gray-800 last:border-0">
       <span className="text-sm text-gray-400">{label}</span>
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-gray-200">
-          {current}{unit}
-        </span>
+        <span className="text-sm font-medium text-gray-200">{current}{unit}</span>
         <span
           className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
             isNeutral
@@ -103,6 +102,7 @@ function GoalBar({
 }
 
 export default function DashboardPage() {
+  const { profile } = useProfile();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [settings, setSettings] = useState<Settings>({
     height: null,
@@ -112,11 +112,11 @@ export default function DashboardPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    const data = getData();
+    const data = getData(profile);
     setEntries(data.entries);
     setSettings(data.settings);
     setLoaded(true);
-  }, []);
+  }, [profile]);
 
   if (!loaded) return null;
 
@@ -125,14 +125,15 @@ export default function DashboardPage() {
   const previous = sorted.at(-2);
   const first = sorted.at(0);
   const hasGoals = settings.goalFatPercent !== null || settings.goalWeight !== null;
+  const profileName = profile === 'bill' ? 'Bill' : 'Mel';
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
       {!latest ? (
         <div className="text-center py-20">
           <div className="text-5xl mb-4">📊</div>
-          <h2 className="text-xl font-semibold text-gray-200 mb-2">No data yet</h2>
-          <p className="text-gray-500 mb-6">Log your first weigh-in to start tracking.</p>
+          <h2 className="text-xl font-semibold text-gray-200 mb-2">No data for {profileName}</h2>
+          <p className="text-gray-500 mb-6">Log the first weigh-in to start tracking.</p>
           <Link
             href="/log"
             className="inline-block bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-medium transition-colors text-base"

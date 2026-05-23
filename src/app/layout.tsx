@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Nav } from '@/components/Nav';
+import { ProfileProvider } from '@/context/ProfileContext';
 
 export const metadata: Metadata = {
   title: 'bodyrec',
@@ -11,8 +12,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="h-full">
       <body className="min-h-full bg-[#0f1117] text-gray-100 antialiased">
-        <Nav />
-        <main className="pb-10">{children}</main>
+        <ProfileProvider>
+          <Nav />
+          <main className="pb-10">{children}</main>
+        </ProfileProvider>
       </body>
     </html>
   );
