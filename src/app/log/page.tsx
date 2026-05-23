@@ -148,8 +148,11 @@ function LogForm() {
 
       await saveEntry(entry, profile);
       router.push('/');
-    } catch {
-      setError('Failed to save entry. Please try again.');
+    } catch (err) {
+      console.error('[bodyrec] handleSubmit error:', err);
+      const msg = err instanceof Error ? err.message
+        : (err as { message?: string })?.message ?? String(err);
+      setError(`Save failed: ${msg}`);
       setSubmitting(false);
     }
   }

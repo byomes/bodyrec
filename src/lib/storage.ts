@@ -115,21 +115,29 @@ export async function findEntryById(id: string, profile: Profile): Promise<Entry
 // ── Write ────────────────────────────────────────────────────────────────────
 
 export async function saveEntry(entry: Entry, profile: Profile): Promise<void> {
-  const { error } = await supabase
+  const row = entryToRow(entry, profile);
+  console.log('[bodyrec] saveEntry →', row);
+  const { data, error } = await supabase
     .from('entries')
-    .upsert(entryToRow(entry, profile), { onConflict: 'id' });
+    .upsert(row, { onConflict: 'id' })
+    .select();
+  console.log('[bodyrec] saveEntry ← data:', data, 'error:', error);
   if (error) throw error;
 }
 
 export async function deleteEntry(id: string, profile: Profile): Promise<void> {
   const { error } = await supabase.from('entries').delete().eq('id', id).eq('profile', profile);
-  if (error) throw error;
+  if (error) { console.error('[bodyrec] deleteEntry error:', error); throw error; }
 }
 
 export async function saveSettings(settings: Settings, profile: Profile): Promise<void> {
-  const { error } = await supabase
+  const row = settingsToRow(settings, profile);
+  console.log('[bodyrec] saveSettings →', row);
+  const { data, error } = await supabase
     .from('settings')
-    .upsert(settingsToRow(settings, profile), { onConflict: 'profile' });
+    .upsert(row, { onConflict: 'profile' })
+    .select();
+  console.log('[bodyrec] saveSettings ← data:', data, 'error:', error);
   if (error) throw error;
 }
 
