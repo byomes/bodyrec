@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Profile } from '@/lib/types';
-import { migrateIfNeeded } from '@/lib/storage';
+import { migrateFromLocalStorage } from '@/lib/storage';
 
 const ACTIVE_PROFILE_KEY = 'recomp-active-profile';
 
@@ -19,9 +19,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfileState] = useState<Profile>('bill');
 
   useEffect(() => {
-    migrateIfNeeded();
     const stored = localStorage.getItem(ACTIVE_PROFILE_KEY);
     if (stored === 'bill' || stored === 'mel') setProfileState(stored);
+    // Fire-and-forget — migration errors are logged but don't block the app
+    migrateFromLocalStorage().catch(console.error);
   }, []);
 
   function setProfile(p: Profile) {
